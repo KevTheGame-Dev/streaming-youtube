@@ -1,0 +1,30 @@
+{
+  "name": "streaming-youtube",
+  "version": "1.0.0",
+  "engines": {
+    "node": "10.6.0",
+    "npm": "6.1.0"
+  },
+  "description": "Streams youtube audio and plays it through a visualizer",
+  "main": "index.js",
+  "scripts": {
+    "start": "node ./src/server.js",
+    "pretest": "eslint ./src --fix",
+    "test": "echo \"Tests complete\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KevTheGame-Dev/streaming-youtube.git"
+  },
+  "author": "Kevin Barrett",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/KevTheGame-Dev/streaming-youtube/issues"
+  },
+  "homepage": "https://github.com/KevTheGame-Dev/streaming-youtube#readme",
+  "devDependencies": {
+    "eslint": "^5.6.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-plugin-import": "^2.14.0"
+  }
+}
