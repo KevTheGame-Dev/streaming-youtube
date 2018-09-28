@@ -1,6 +1,6 @@
 const http = require('http');
 const htmlHandler = require('./htmlResponses');
-const mediaHandler = require('./mediaResponses');
+const audioHandler = require('./audioResponses.js');
 
 const port = process.env.PORT || process.env.NODE_PORT || 3000;
 
@@ -11,20 +11,8 @@ const onRequest = (request, response) => {
     case '/':
       htmlHandler.getIndex(request, response);
       break;
-    case '/page2':
-      htmlHandler.getPageTwo(request, response);
-      break;
-    case '/page3':
-      htmlHandler.getPageThree(request, response);
-      break;
-    case '/party.mp4':
-      mediaHandler.getParty(request, response);
-      break;
-    case '/bling.mp3':
-      mediaHandler.getBling(request, response);
-      break;
-    case '/bird.mp4':
-      mediaHandler.getBird(request, response);
+    case '/audio':
+      audioHandler.getAudio(request, response);
       break;
     default:
       htmlHandler.getIndex(request, response);
