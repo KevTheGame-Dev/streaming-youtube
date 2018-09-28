@@ -14,6 +14,9 @@ const onRequest = (request, response) => {
     case '/audio':
       audioHandler.getAudio(request, response);
       break;
+    case '/processAudio.js':
+      htmlHandler.getAudioJS(request, response);
+      break;
     default:
       htmlHandler.getIndex(request, response);
       break;
