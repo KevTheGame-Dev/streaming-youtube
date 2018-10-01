@@ -1,15 +1,17 @@
 const youtubeStream = require('youtube-audio-stream');
 
-const getAudio = function (req, res) {
+const getAudio = function (request, response, params) {
   console.log('stream request recieved');
-  const requestUrl = `http://youtube.com/watch?v=${req.params.videoID}`;
+  console.log(params);
+  const requestUrl = `http://youtube.com/watch?v=${params.videoID}`;
   try {
-    console.log('Trying to stream');
-    youtubeStream(requestUrl).pipe(res);
+    console.log(`Trying to stream: ${requestUrl}`);
+    youtubeStream(requestUrl).pipe(response);
     console.log('stream complete');
   } catch (exception) {
     console.log('streaming failed');
-    res.status(500).send(exception);
+    response.writeHead(500, { 'Content-Type': 'text/html' });
+    response.end();
   }
 };
 
