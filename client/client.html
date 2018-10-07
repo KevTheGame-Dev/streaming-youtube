@@ -4,6 +4,7 @@
     <meta charset="utf-8"/>
     <title>Simple Video Stream</title>
     <link rel="stylesheet" type="text/css" href="/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <style>
         html, body {
             height: 100%;
@@ -23,12 +24,50 @@
     <script src="processAudio.js"></script>
 </head>
 <body>
-    <canvas id="canvas" width="640" height="400"></canvas>
-    <button id="playButton">Play</button>
-    <button id="pauseButton">Pause</button>
-    <form id="video-input">
-        <input id="video-url" type="text" />
-        <button type="submit">Stream Audio</button>
-    </form>
+    <div id="visualiser">
+        <canvas id="canvas" width="800" height="600"></canvas>
+        
+        <div id="hoverField">
+            <div id="controls">
+                <div id="playPause">
+                    <button id="playButton" title="Play" class="fa controlButton">&#xf04b;</button>
+                    <button id="pauseButton" title="Pause" class="fa controlButton">&#xf04c;</button>
+                </div>
+                <form id="video-input">
+                    <input id="video-url" type="text" />
+                    <button type="submit">Stream Audio</button><br/>
+                    
+                    <br/>
+                    <label>Tint
+                        <select id="tintSelect">
+                            <option value="white">None</option>
+                            <option value="red">Red</option>
+                            <option value="green">Green</option>
+                            <option value="blue">Blue</option>
+                            <option value="violet">Violet</option>
+                            <option value="cyan">Cyan</option>
+                            <option value="purple">Purple</option>
+                        </select>
+                    </label>
+                    <br/>
+                    <input type="checkbox" id="doInvert"> Invert Colors <br/>
+                    <input type="checkbox" id="doEmboss"> Emboss <br/>
+                    <input type="checkbox" id="doNoise"> Noise <input type="range" min="0" max="100" value="30" id="noiseSlider"> <br/>
+                    <input type="checkbox" id="doLines"> Lines <br/>
+                    <input type="checkbox" id="colorSwap"> Swap color values (R -> G -> B -> R)
+
+                    <br/>
+                    <br/>
+                    <input type="checkbox" id="doReverb"> Reverb <input type="range" min="0.0" max="1.0" value="0.5" step="0.1" id="reverbSlider"> <br/>
+                    <input type="checkbox" id="doHighshelf"> Highshelf Filter <br/>
+                    <input type="checkbox" id="doLowshelf"> Lowshelf Filter <br/>
+                    <input type="checkbox" id="doDistortion"> Distortion <input type="range" min="0" max="100" value="0" id="distortionSlider"> <br/>
+                </form>
+            </div>
+        </div>
+        
+        <p id="controlsLabel">^ Controls ^</p>
+        <p id="loadingWarning">Paste any youtube link in to begin playing music. Please be patient while it loads.</p>
+    </div>
 </body>
 </html>

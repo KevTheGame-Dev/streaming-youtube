@@ -1,6 +1,71 @@
+body{
+    background-color: #313639;
+}
+
+#visualiser{
+    margin: auto;
+    width: 800px;
+    height: 600px;
+    position: relative;
+    margin-top: 50px;
+}
+
 canvas {
-    margin-left:10px;
-    margin-top:10px;
     box-shadow: 4px 4px 8px rgba(0,0,0,0.5);
     background: black;
+}
+
+#controls{
+    background-color: rgba(49, 54, 57, 0.6);
+    width: 0px;
+    transition: width 0.5s;
+    height: 600px;
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    float: right;
+    overflow: hidden;
+    color: white;
+}
+
+#playPause{
+    width: 100%;
+}
+
+.controlButton{
+    color: white;
+    font-size: 48px!important;
+    background: none;
+    border: none;
+    padding: 5px 5px;
+    margin:auto;
+    text-align: center;
+    position: relative;
+}
+
+.controlButton:hover{
+    background-color: rgba(100, 100, 100, 0.6);
+}
+
+#hoverField{
+    width: 200px;
+    height: 600px;
+    position: absolute;
+    top: 0px;
+    right: 0px;
+    float: right;
+}
+
+#controlsLabel{
+    text-align: center;
+    transform: rotate(90deg);
+    transform-origin: 220px -150px 0;
+    color: rgba(255, 255, 255, 0.6);
+    float: right;
+}
+
+#loadingWarning{
+    text-align: center;
+    width: 100%;
+    color: white;
 }

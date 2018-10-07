@@ -1,19 +1,33 @@
 window.onload = () => {
 
     //AUDIO STREAMING CODE
-    var audioCTX, audioCTXBuffer, mainBuffer;
-    var playButton, pauseButton;
-    var startedAt, pausedAt;
+    let audioCTX = new (window.AudioContext || window.webkitAudioContext);
+    let audioCTXBuffer, mainBuffer;
+    let playButton, pauseButton;
+    let startedAt, pausedAt;
+    let loading = true;
 
     //AUDIO STREAMING -> AUDIO VISUALIZER VARIABLES;
     const NUM_SAMPLES = 256;
-    var analyserNode;
+    let analyserNode;
+    let delayNode;
+    let delayAmount = 0;
+    let lowShelfBiquadFilter;
+    let highShelfBiquadFilter;
+    let distortionFilter;
+    let distortionAmount = 20;
 
     playButton = document.querySelector('#playButton');
     playButton.onclick = () => {
         if(audioCTXBuffer != null){
             audioCTXBuffer = audioCTX.createBufferSource();
-            audioCTXBuffer.connect(analyserNode);
+
+            //connect nodes
+            audioCTXBuffer.connect(lowShelfBiquadFilter);
+            lowShelfBiquadFilter.connect(highShelfBiquadFilter);
+            highShelfBiquadFilter.connect(distortionFilter);
+            distortionFilter.connect(analyserNode);
+
             audioCTXBuffer.buffer = mainBuffer;
             analyserNode.connect(audioCTX.destination);
             audioCTXBuffer.start(0, pausedAt / 1000);
@@ -44,7 +58,7 @@ window.onload = () => {
     pauseButton.style.display = 'none';
 
     document.querySelector('#video-input').onsubmit = (e) => {
-        var videoUrl = document.querySelector("#video-url").value;
+        let videoUrl = document.querySelector("#video-url").value;
     
         if(audioCTXBuffer != null){
             audioCTXBuffer.stop();
@@ -58,33 +72,45 @@ window.onload = () => {
             videoUrl = videoUrl.split('=')[1];
         }
 
-        audioCTX = new (window.AudioContext || window.webkitAudioContext);
         analyserNode = audioCTX.createAnalyser();
         analyserNode.fttSize = NUM_SAMPLES;
-        audioCTXBuffer = audioCTX.createBufferSource();
-        audioCTXBuffer.connect(analyserNode);
 
+        delayNode = audioCTX.createDelay();
+        delayNode.delayTime.value = delayAmount;
+
+        lowShelfBiquadFilter = audioCTX.createBiquadFilter();
+        lowShelfBiquadFilter.type = 'lowshelf';
+        highShelfBiquadFilter = audioCTX.createBiquadFilter();
+        highShelfBiquadFilter.type = 'highshelf';
+        distortionFilter = audioCTX.createWaveShaper();
+
+        audioCTXBuffer = audioCTX.createBufferSource();
+        audioCTXBuffer.connect(lowShelfBiquadFilter);
+        lowShelfBiquadFilter.connect(highShelfBiquadFilter);
+        highShelfBiquadFilter.connect(distortionFilter);
+        distortionFilter.connect(analyserNode);
+
+        loading = true;
+        update();
         sendRequest(e, videoUrl);
     }
 
     const handleResponse = (e, xhr) => {
-        console.log("stream response recieved");
         audioCTX.decodeAudioData(xhr.response, buffer => {
             
+            loading = false;
             mainBuffer = buffer;
             audioCTXBuffer.buffer = buffer;
             analyserNode.connect(audioCTX.destination);
             audioCTXBuffer.start();
             audioCTXBuffer.loop = true;
 
-            update();
             startedAt = Date.now();
 
             playButton.disable = false;
             playButton.style.display = 'none';
             pauseButton.style.display = 'block';
             currentTimeInAudio = 0;
-            console.log("streaming...");
         });
 
         e.preventDefault();
@@ -93,14 +119,13 @@ window.onload = () => {
 
     const sendRequest = (e, videoID) => {
         const xhr = new XMLHttpRequest();
-        var url = '/audio' + `?videoID=${videoID}`;
+        let url = '/audio' + `?videoID=${videoID}`;
         xhr.open('GET', url);
 
         xhr.responseType = 'arraybuffer';
         xhr.setRequestHeader("Content-Type", 'application/x-www-form-urlencoded');
         xhr.onload = () => handleResponse(e, xhr);
         xhr.send();
-        console.log("stream request sent");
 
         e.preventDefault();
         return false;
@@ -110,140 +135,155 @@ window.onload = () => {
     //AUDIO VISUALIZER CODE
     canvas = document.querySelector('#canvas');
     ctx = canvas.getContext('2d');
-    var animationID;
-    var maxRadius = 100;
-    var tintColor = 'white';
-    var invertIsChecked = false;
-    var embossIsChecked = false;
-    var noiseIsChecked = false;
-    var linesIsChecked = false;
-    var colorSwapIsChecked = false;
-    var noiseFrequency = 30;
-    var imgData;
+    let animationID;
+    let maxRadius = 100;
+    let tintColor = 'white';
+    let invertIsChecked = false;
+    let embossIsChecked = false;
+    let noiseIsChecked = false;
+    let linesIsChecked = false;
+    let colorSwapIsChecked = false;
+    let noiseFrequency = 30;
+    let imgData;
+    let loadingNum = 0;
+    let loadingX = -100;
 
     function update() { 
         // this schedules a call to the update() method in 1/60 seconds
         animationID = requestAnimationFrame(update);
-        
-        /*
-            Nyquist Theorem
-            http://whatis.techtarget.com/definition/Nyquist-Theorem
-            The array of data we get back is 1/2 the size of the sample rate 
-        */
-        
-        // create a new array of 8-bit integers (0-255)
-        var data = new Uint8Array(NUM_SAMPLES/2); 
-        
-        // populate the array with the frequency data
-        // notice these arrays can be passed "by reference" 
-        analyserNode.getByteFrequencyData(data);
     
-        // OR
-        //analyserNode.getByteTimeDomainData(data); // waveform data
         
-        // DRAW!
-        ctx.clearRect(0,0,800,600);  
-        var barWidth = 4;
-        var barSpacing = 1;
-        var barHeight = 100;
-        var topSpacing = 50;
-        
+        // Clear the canvas for next frame
+        ctx.clearRect(0,0,1800,1600);
 
-        var songDuration = audioCTXBuffer.buffer.duration;
-        var currentTime = Date.now() - startedAt;
-        var shapeChanger = 16;
-        if(currentTime < songDuration / 16) shapeChanger = 16;
-        else if(currentTime < songDuration*2 / 16) shapeChanger = 17;
-        else if(currentTime < songDuration*3 / 16) shapeChanger = 18;
-        else if(currentTime < songDuration*4 / 16) shapeChanger = 19;
-        else if(currentTime < songDuration*5 / 16) shapeChanger = 20;
-        else if(currentTime < songDuration*6 / 16) shapeChanger = 21;
-        else if(currentTime < songDuration*7 / 16) shapeChanger = 22;
-        else if(currentTime < songDuration*8 / 16) shapeChanger = 23;
-        else if(currentTime < songDuration*9 / 16) shapeChanger = 24;
-        else if(currentTime < songDuration*10 / 16) shapeChanger = 25;
-        else if(currentTime < songDuration*11 / 16) shapeChanger = 26;
-        else if(currentTime < songDuration*12 / 16) shapeChanger = 27;
-        else if(currentTime < songDuration*13 / 16) shapeChanger = 28;
-        else if(currentTime < songDuration*14 / 16) shapeChanger = 29;
-        else if(currentTime < songDuration*15 / 16) shapeChanger = 30;
-        else if(currentTime < songDuration) shapeChanger = 31;
-
-
-        
-        // loop through the data and draw!
-        for(var i=0; i<data.length; i++) { 
-            ctx.fillStyle = 'rgba(0,255,0,0.6)'; 
-            
-            // the higher the amplitude of the sample (bin) the taller the bar
-            // remember we have to draw our bars left-to-right and top-down
-            //ctx.fillRect(i * (barWidth + barSpacing),topSpacing + 256-data[i],barWidth,barHeight); 
-            //Inversion
-            //ctx.fillRect(640-i * (barWidth + barSpacing), topSpacing + 256-data[i] - 20, barWidth, barHeight);
-            
-
-            //circles
-            //red
-
-            var percent = data[i] / 255;
-
-            if(i == 1){
-                ctx.save();
-                ctx.strokeStyle = "#ffffff";
-                ctx.linePath = "round";
-                ctx.lineJoin = "round";
-                ctx.beginPath();
-                ctx.moveTo(0, ctx.canvas.height);
-                //ctx.lineTo(ctx.canvas.width/2 - ctx.canvas.width/3, ctx.canvas.height/2 + ctx.canvas.height/3);
-                //ctx.moveTo(ctx.canvas.width/2 - 100, ctx.canvas.height/2 + 100);
-                ctx.quadraticCurveTo(ctx.canvas.width/2 - (percent * 255), ctx.canvas.height/2 - (percent * 255), ctx.canvas.width/2, ctx.canvas.height/2)
-                ctx.stroke();
-                ctx.closePath();
-                ctx.restore();
-
-                ctx.save();
-                ctx.strokeStyle = "#ffffff";
-                ctx.linePath = "round";
-                ctx.lineJoin = "round";
-                ctx.beginPath();
-                ctx.moveTo(ctx.canvas.width, 0);
-                //ctx.lineTo(ctx.canvas.width/2 + ctx.canvas.width/3, ctx.canvas.height/2 - ctx.canvas.height/3);
-                //ctx.quadraticCurveTo(ctx.canvas.width/2 + ctx.canvas.width/3 - (percent * 255), ctx.canvas.height/2 - ctx.canvas.height/3 - (percent * 255), ctx.canvas.width/2 + ctx.canvas.width/3, ctx.canvas.height/2 - ctx.canvas.height/3)
-                //ctx.moveTo(ctx.canvas.width/2 - 100, ctx.canvas.height/2 + 100);
-                ctx.quadraticCurveTo(ctx.canvas.width/2 + (percent * 255), ctx.canvas.height/2 + (percent * 255), ctx.canvas.width/2, ctx.canvas.height/2)
-                ctx.stroke();
-                ctx.closePath();
-                ctx.restore();
-            }
-
-            var angle;
-            var x;
-            var y;
+        //If loading audio data from server, draw loading animation
+        if(loading){
+            loadingNum += 1;
 
             ctx.save();
-            ctx.translate(ctx.canvas.width/2, ctx.canvas.height/2);
-            ctx.scale(0.3, 0.3);
-            
-            for (var j=0; j< 720; j+=shapeChanger) {
-                angle = 0.2 * j;
-                x=(percent*255+angle)*Math.cos(angle);
-                y=(percent*255+angle)*Math.sin(angle);
-                drawCircle(ctx, x, y, 5, "red");
+            ctx.translate(ctx.canvas.width/2 - 35, ctx.canvas.height/2 - 30);
+
+            //Draw greyed loading bars
+            for(let i = 0; i < 8; i++){
+                ctx.fillStyle = 'grey';
+                ctx.beginPath();
+                ctx.rect(i * 10, 0, 10, 30);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
             }
+
+            //Draw white loading bar
+            if(loadingNum < 15){
+                loadingX = 0;
+            }
+            else if(loadingNum < 30){
+                loadingX = 10;
+            }
+            else if(loadingNum < 45){
+                loadingX = 20;
+            }
+            else if(loadingNum < 60){
+                loadingX = 30;
+            }
+            else if(loadingNum < 75){
+                loadingX = 40;
+            }
+            else if(loadingNum < 90){
+                loadingX = 50;
+            }
+            else if(loadingNum < 105){
+                loadingX = 60;
+            }
+            else if(loadingNum < 120){
+                loadingX = 70;
+            }
+            else if(loadingNum > 120){
+                loadingNum = 0;
+            }
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.rect(loadingX, 0, 10, 30);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            
             ctx.restore();
+        }
+        else{
+            
+            // create a new array of 8-bit integers (0-255)
+            let data = new Uint8Array(NUM_SAMPLES/2);
+            let data_w = new Uint8Array(NUM_SAMPLES/2);
+            
+            // populate the array with the frequency data
+            // notice these arrays can be passed "by reference" 
+            analyserNode.getByteFrequencyData(data);
+            analyserNode.getByteTimeDomainData(data_w);
+
+
+            //Draw waveform 'guitar string'
+            for(let i = 0; i < data_w.length; i++){
+                let percent = data_w[i] / 255;
+
+                //Focus on base waveform
+                if(i == 1){
+                    //Bottom right 'string'
+                    ctx.save();
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.linePath = "round";
+                    ctx.lineJoin = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(0, ctx.canvas.height);
+                    ctx.quadraticCurveTo(ctx.canvas.width/2 - (percent * 255), ctx.canvas.height/2 - (percent * 255), ctx.canvas.width/2, ctx.canvas.height/2)
+                    ctx.stroke();
+                    ctx.closePath();
+                    ctx.restore();
+
+                    //Top right 'string'
+                    ctx.save();
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.linePath = "round";
+                    ctx.lineJoin = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(ctx.canvas.width, 0);
+                    ctx.quadraticCurveTo(ctx.canvas.width/2 + (percent * 255), ctx.canvas.height/2 + (percent * 255), ctx.canvas.width/2, ctx.canvas.height/2)
+                    ctx.stroke();
+                    ctx.closePath();
+                    ctx.restore();
+                }
+            }
+
+
+            //Use frequency data to draw circles
+            for(let i=0; i<data.length; i++) {
+
+                let percent = data[i] / 255;
+
+                if(i%4 == 0){
+                    let angle;
+                    let x;
+                    let y;
+
+                    ctx.save();
+                    ctx.translate(ctx.canvas.width/2, ctx.canvas.height/2);
+                    ctx.scale(0.5, 0.5);
+                    
+                    //Draw circles in a really cool mathy 'spiral'
+                    for (let j=0; j< 720; j+=16) {
+                        angle = 0.2 * j;
+                        x=(percent*255+angle)*Math.cos(angle);
+                        y=(percent*255+angle)*Math.sin(angle);
+                        drawCircle(ctx, x, y, 5, `rgb(${percent*255}, ${j/2}, ${percent*255})`);//Base color off of percent & spiral location
+                    }
+                    ctx.restore();
+                }
+                
+            }
+
             
         }
-
-        //for(var i = 0; i < data.length; i+=4){
-            
-            //Draw circles
-            //ctx.save();
-            /* ctx.translate(ctx.canvas.width/2, ctx.canvas.height/2);
-            ctx.rotate(15*i);
-            var cirColor = makeColor(percent * 255 , 255 - (percent * 255), percent * 255 / 2, 1.0);
-            drawCircle(ctx, i, 10+data[i], 5, cirColor);
-            ctx.restore(); */
-        //}
          
 
         switch(tintColor){
@@ -294,15 +334,15 @@ window.onload = () => {
             
             //invert
             if(invertIsChecked){
-                for(var i = 0; i < imgData.data.length; i+=4){
-                    var red = i;
-                    var green = i+1;
-                    var blue = i+2;
-                    var alpha = i+3;
+                for(let i = 0; i < imgData.data.length; i+=4){
+                    let red = i;
+                    let green = i+1;
+                    let blue = i+2;
+                    let alpha = i+3;
                     
-                    var newRed = 255 - imgData.data[red];
-                    var newGreen = 255 - imgData.data[green];
-                    var newBlue = 255 - imgData.data[blue];
+                    let newRed = 255 - imgData.data[red];
+                    let newGreen = 255 - imgData.data[green];
+                    let newBlue = 255 - imgData.data[blue];
                     imgData.data[red] = newRed;
                     imgData.data[green] = newGreen;
                     imgData.data[blue] = newBlue;
@@ -311,21 +351,21 @@ window.onload = () => {
             
             //emboss
             if(embossIsChecked){
-                for(var i = 0; i < imgData.data.length; i++){
+                for(let i = 0; i < imgData.data.length; i++){
                     if(i%4 === 3) continue;
                     imgData.data[i] = 127 + 2*imgData.data[i] - imgData.data[i + 4] - imgData.data[i + ctx.canvas.width*4];
                 }
             }
 
-            var random = Math.random();
+            let random = Math.random();
             if(noiseIsChecked){
-                for(var i = 0; i < imgData.data.length; i+=4){
-                    var red = i;
-                    var green = i+1;
-                    var blue = i+2;
-                    var alpha = i+3;
+                for(let i = 0; i < imgData.data.length; i+=4){
+                    let red = i;
+                    let green = i+1;
+                    let blue = i+2;
+                    let alpha = i+3;
                     
-                    var makeBlack = Math.random();
+                    let makeBlack = Math.random();
                     if(makeBlack < noiseFrequency * 0.01){
                         imgData.data[red] = 0;
                         imgData.data[green] = 0;
@@ -335,12 +375,12 @@ window.onload = () => {
             }
 
             if(linesIsChecked){
-                for(var i = 0; i < imgData.data.length; i+=4){
-                    var rows = Math.floor(i/4/ctx.canvas.width);
-                    var red = i;
-                    var green = i+1;
-                    var blue = i+2;
-                    var alpha = i+3;
+                for(let i = 0; i < imgData.data.length; i+=4){
+                    let rows = Math.floor(i/4/ctx.canvas.width);
+                    let red = i;
+                    let green = i+1;
+                    let blue = i+2;
+                    let alpha = i+3;
 
                     if(rows % 50 === 0){
                         imgData.data[red] = 255;
@@ -354,15 +394,15 @@ window.onload = () => {
             }
 
             if(colorSwapIsChecked){
-                for(var i = 0; i < imgData.data.length; i+=4){
-                    var red = i;
-                    var green = i+1;
-                    var blue = i+2;
-                    var alpha = i+3;
+                for(let i = 0; i < imgData.data.length; i+=4){
+                    let red = i;
+                    let green = i+1;
+                    let blue = i+2;
+                    let alpha = i+3;
                     
-                    var newRed = imgData.data[blue];
-                    var newGreen = imgData.data[red];
-                    var newBlue = imgData.data[green];
+                    let newRed = imgData.data[blue];
+                    let newGreen = imgData.data[red];
+                    let newBlue = imgData.data[green];
                     imgData.data[red] = newRed;
                     imgData.data[green] = newGreen;
                     imgData.data[blue] = newBlue;
@@ -375,7 +415,7 @@ window.onload = () => {
 
     //Helper functions
     function makeColor(red, green, blue, alpha){
-        var color='rgba('+red+','+green+','+blue+', '+alpha+')';
+        let color='rgba('+red+','+green+','+blue+', '+alpha+')';
         return color;
     }
 
@@ -391,5 +431,133 @@ window.onload = () => {
         ctx.fill();
         ctx.stroke();
         ctx.restore();
+    }
+
+
+    //SET UP UI
+    const controls = document.querySelector('#controls');
+    const hoverField = document.querySelector('#hoverField');
+    const controlsLabel = document.querySelector('#controlsLabel');
+
+    hoverField.onmouseover = () => {
+        controls.style.width = '200px';
+        controlsLabel.style.display = 'none';
+    }
+    hoverField.onmouseout = () => {
+        controls.style.width = '0px';
+        controlsLabel.style.display = 'block';
+    }
+
+    document.querySelector('#tintSelect').onchange = function(e){
+        tintColor = e.target.value;
+    }
+
+    document.querySelector('#doInvert').onchange = function(e){
+        invertIsChecked = !invertIsChecked;
+    }
+
+    document.querySelector('#doEmboss').onchange = function(e){
+        embossIsChecked = !embossIsChecked;
+    }
+
+    document.querySelector('#doNoise').onchange = function(e){
+        noiseIsChecked = !noiseIsChecked;
+    }
+
+    let noiseSlider = document.querySelector('#noiseSlider');
+    noiseSlider.oninput = function(){
+        noiseFrequency = this.value;
+    }
+
+    document.querySelector('#doLines').onchange = function(e){
+        linesIsChecked = !linesIsChecked;
+    }
+    
+    document.querySelector('#colorSwap').onchange = function(e){
+        colorSwapIsChecked = !colorSwapIsChecked;
+    }
+
+    document.querySelector('#doReverb').onchange = function(e){
+        if(document.querySelector('#doReverb').checked){
+            audioCTXBuffer.disconnect();
+            delayNode.disconnect();
+            lowShelfBiquadFilter.disconnect();
+            highShelfBiquadFilter.disconnect();
+            distortionFilter.disconnect();
+            analyserNode.disconnect();
+
+            audioCTXBuffer.connect(audioCTX.destination);
+            audioCTXBuffer.connect(lowShelfBiquadFilter);
+            lowShelfBiquadFilter.connect(highShelfBiquadFilter);
+            highShelfBiquadFilter.connect(distortionFilter);
+            distortionFilter.connect(delayNode);
+            delayNode.connect(analyserNode);
+            analyserNode.connect(audioCTX.destination);
+        }
+        else{
+            audioCTXBuffer.disconnect();
+            delayNode.disconnect();
+            lowShelfBiquadFilter.disconnect();
+            highShelfBiquadFilter.disconnect();
+            distortionFilter.disconnect();
+            analyserNode.disconnect();
+
+            audioCTXBuffer.connect(lowShelfBiquadFilter);
+            lowShelfBiquadFilter.connect(highShelfBiquadFilter);
+            highShelfBiquadFilter.connect(distortionFilter);
+            distortionFilter.connect(analyserNode);
+        }
+    }
+    let reverbSlider = document.querySelector('#reverbSlider');
+    reverbSlider.oninput = function(){
+        delayAmount = this.value;
+        delayNode.delayTime.value = delayAmount;
+    }
+
+
+
+    document.querySelector('#doHighshelf').onchange = function(e){
+        if(document.querySelector('#doHighshelf').checked){
+            highShelfBiquadFilter.frequency.setValueAtTime(1000, audioCTX.currentTime);
+            highShelfBiquadFilter.gain.setValueAtTime(10, audioCTX.currentTime);
+        }
+        else{
+            highShelfBiquadFilter.gain.setValueAtTime(0, audioCTX.currentTime);
+        }
+    }
+
+    document.querySelector('#doLowshelf').onchange = function(e){
+        if(document.querySelector('#doLowshelf').checked){
+            lowShelfBiquadFilter.frequency.setValueAtTime(1000, audioCTX.currentTime);
+            lowShelfBiquadFilter.gain.setValueAtTime(8, audioCTX.currentTime);
+        }
+        else{
+            lowShelfBiquadFilter.gain.setValueAtTime(0, audioCTX.currentTime);
+        }
+    }
+
+
+    document.querySelector('#doDistortion').onchange = function(e){
+        if(document.querySelector('#doDistortion').checked){
+            distortionFilter.curve = null; // being paranoid and trying to trigger garbage collection
+            distortionFilter.curve = makeCurve(distortionAmount);
+            
+        }else{
+            distortionFilter.curve = null;
+        }
+    }
+    let distortionSlider = document.querySelector('#distortionSlider');
+    distortionSlider.oninput = function(){
+        distortionAmount = this.value;
+        distortionFilter.curve = makeCurve(distortionAmount);
+    }
+
+    makeCurve = (amount) => {
+        let n_samples = 256, curve = new Float32Array(n_samples);
+        for (let i =0 ; i < n_samples; ++i ) {
+          let x = i * 2 / n_samples - 1;
+          curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+        }
+        return curve;;
     }
 };
